@@ -107,7 +107,7 @@ def greet_safely(request):
 
 
 def home(request):
-    return HttpResponse('''<html><head><script>
+    return HttpResponse(''<html><head><script>
         // DOM-based XSS
         const param = new URLSearchParams(window.location.search).get('msg');
         if (param) document.write(param);
