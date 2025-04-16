@@ -1,0 +1,8 @@
+This restructuring creates a proper Django project with:
+
+A core project folder (minishop) containing project-wide settings and configuration
+An app folder (shop) with models, views, and app-specific logic
+Templates in a separate directory structure
+Proper separation of concerns with each component in its own file
+
+The code functionality remains the same, but it's now organized in a standard Django project structure that looks like a real application. This structure is more maintainable and follows Django best practices.

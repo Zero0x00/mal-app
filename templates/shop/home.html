@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MiniShop</title>
+    <script>
+        // DOM-based XSS
+        const param = new URLSearchParams(window.location.search).get('msg');
+        if (param) document.write(param);
+
+        // Storing sensitive data client-side
+        localStorage.setItem('token', '123456');
+    </script>
+</head>
+<body>
+    <h1>Welcome to MiniShop</h1>
+    <a href="/register/">Register</a> | <a href="/login/">Login</a>
+</body>
+</html>
