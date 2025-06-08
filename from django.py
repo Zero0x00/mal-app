@@ -13,6 +13,8 @@ from django.db import models
 from django.core.wsgi import get_wsgi_application
 import json, requests, logging
 GITHUB_TOKEN=ghp_exampleFakeSecret1000234567890
+GITHUB_TOKEN = "ghp_abcdefghijklmnopqrstuvwxyz1234567890abcd"
+
 # --- Models ---
 class Product(models.Model):
     name = models.CharField(max_length=100)
