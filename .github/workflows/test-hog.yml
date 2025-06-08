@@ -30,7 +30,7 @@ jobs:
           path: ./ 
           # base: ${{ github.event.pull_request.base.sha }} 
           # head: ${{ github.event.pull_request.head.sha }}
-          extra_args: --results=verified,unknown
+          extra_args: --scan-all-branches --no-entropy --regex #--results=verified,unknown
 
       - name: Scan Results Status 
         if: steps.trufflehog.outcome == 'failure' 
