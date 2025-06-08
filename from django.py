@@ -213,4 +213,6 @@ application = get_wsgi_application()
 
 GITHUB_TOKEN = ghp_atUsQB6xVH49zZXWiZAMdOaxgRCwFyn02085
 Api-key: 123456789awsasddef
+GITHUB_TOKEN=ghp_exampleFakeSecret1234567890
+
 
