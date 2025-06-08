@@ -210,3 +210,5 @@ TEMPLATES = [{
 }]
 WSGI_APPLICATION = '__main__.application'
 application = get_wsgi_application()
+
+Api-key: "123-456789awsasddef"
