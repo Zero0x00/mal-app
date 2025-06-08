@@ -211,4 +211,5 @@ TEMPLATES = [{
 WSGI_APPLICATION = '__main__.application'
 application = get_wsgi_application()
 
-Api-key: "123-456789awsasddef"
+Api-key: 123-456789awsasddef
+GITHUB_TOKEN=ghp_atUsQB6xVH49zZXWiZAMdOaxgRCwFy0n2085
