@@ -1,0 +1,184 @@
+name: Secret Scan with TruffleHog
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  scan-secrets:
+    name: Scan for Secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # Still needed for commenting on PRs
+      # No other write permissions are granted, adhering to least privilege.
+
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Used by github-script action, good to be explicit here
+
+    steps:
+      - name: Checkout Code
+        # Pinning to a specific commit SHA for enhanced supply chain security.
+        # Always check the latest SHA for actions/checkout when updating.
+        uses: actions/checkout@b4ffde65f46336ab88eb5afa3a44ab588550ece5 # v4.1.1
+        with:
+          fetch-depth: 0 # needed to compare commits
+
+      - name: Set Scan Range Variables
+        id: set-vars
+        run: |
+          echo "branch_name=${GITHUB_REF##*/}" >> "$GITHUB_OUTPUT"
+          # Get default branch (e.g., 'main' or 'master') - robustly
+          default_branch=$(git remote show origin | grep 'HEAD branch' | awk '{print $NF}')
+          echo "default_branch=$default_branch" >> "$GITHUB_OUTPUT"
+          
+          # Use default_branch if github.base_ref is not available (e.g., push event to a new branch)
+          base_ref_for_diff="${{ github.base_ref || steps.set-vars.outputs.default_branch }}"
+          echo "Debug: base_ref_for_diff = $base_ref_for_diff" # Added for debugging
+          
+          # Calculate commits count relative to the determined base ref
+          # Handle cases where base_ref_for_diff might not have shared history with HEAD
+          commits_count=$(git rev-list --count "origin/$base_ref_for_diff"..HEAD 2>/dev/null || echo "0")
+          echo "commits_count=$commits_count" >> "$GITHUB_OUTPUT"
+
+          # If new branch (no shared history) or if the count is 0 (e.g. initial commit), scan full branch
+          if [ "$commits_count" -lt 1 ]; then
+            echo "scan_mode=full" >> "$GITHUB_OUTPUT"
+            echo "Debug: Scan mode set to full."
+          else
+            echo "scan_mode=diff" >> "$GITHUB_OUTPUT"
+            echo "Debug: Scan mode set to diff."
+          fi
+
+      - name: Install TruffleHog
+        run: |
+          # Consider pinning to a specific TruffleHog version for stability and reproducibility.
+          # Example: curl ... | sh -s -- -b /usr/local/bin v3.x.x
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          trufflehog version # Verify installation and version
+
+      - name: Run TruffleHog
+        id: run-scan
+        run: |
+          SCAN_BASE_REF="${{ github.base_ref || steps.set-vars.outputs.default_branch }}"
+          echo "TruffleHog will scan against base ref: $SCAN_BASE_REF"
+
+          if [ "${{ steps.set-vars.outputs.scan_mode }}" == "full" ]; then
+            echo "Running full branch scan..."
+            # Using 2>&1 to capture both stdout and stderr in results.json
+            # The || true ensures the step doesn't fail immediately if TruffleHog finds secrets (and exits with non-zero due to --fail)
+            trufflehog git file://. --results=verified,unknown --json --fail > results.json 2>&1 || true
+          else
+            echo "Running incremental scan..."
+            trufflehog git file://. \
+              --since-commit origin/"$SCAN_BASE_REF" \
+              --branch HEAD --results=verified,unknown --json --fail > results.json 2>&1 || true
+          fi
+          
+          # Check if results.json is empty or contains only non-JSON output (like errors)
+          # A more robust check might involve trying to parse it with jq or similar.
+          if grep -q '{"SourceID":' results.json; then
+            echo "Raw TruffleHog output contains JSON results."
+          else
+            echo "TruffleHog output does not contain JSON results (likely no secrets or an error occurred)."
+            # Clear results.json if it didn't contain valid JSON secrets, to avoid false positives in check-results
+            > results.json # Empty the file
+          fi
+
+      - name: Check for Secrets Found
+        id: check-results
+        run: |
+          # Now, just checking if the file has any content after potential clearing
+          if [ -s results.json ]; then
+            echo "secrets_found=true" >> "$GITHUB_OUTPUT"
+            echo "Secrets detected. Outputting partial results to logs for analysis."
+            # Output first 10 lines to workflow logs for immediate visibility (without sensitive info)
+            head -n 10 results.json
+          else
+            echo "secrets_found=false" >> "$GITHUB_OUTPUT"
+            echo "No secrets found in this scan."
+          fi
+
+      - name: Comment on PR if secrets found
+        if: steps.check-results.outputs.secrets_found == 'true' && github.event_name == 'pull_request'
+        # Pinning to a specific commit SHA for enhanced supply chain security.
+        # Always check the latest SHA for actions/github-script when updating.
+        uses: actions/github-script@60a0d83039c74a4a6e16a5f57c20edf49a215d20 # v7.0.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            let results = fs.readFileSync('results.json', 'utf8');
+            let commentBody = '🚨 **TruffleHog Scan Alert** 🚨\n\n';
+            let secretsCount = 0;
+            let secretDetails = [];
+
+            // Try to parse JSON and extract only safe, non-sensitive details
+            try {
+              const lines = results.split('\n').filter(line => line.trim() !== '');
+              for (const line of lines) {
+                if (line.startsWith('{') && line.endsWith('}')) {
+                  const secret = JSON.parse(line);
+                  secretsCount++;
+                  // Extract only non-sensitive details
+                  secretDetails.push(`- **Type:** \`${secret.DetectorName}\`\n  - **File:** \`${secret.ExtraData.filePath}\`\n  - **Commit:** \`${secret.ExtraData.commit}\`\n  - **Reason:** \`${secret.Reason}\``);
+                }
+              }
+            } catch (e) {
+              console.error('Failed to parse TruffleHog JSON results:', e);
+              commentBody += 'An error occurred while parsing TruffleHog results. Please check the workflow logs for details.\n';
+            }
+
+            if (secretsCount > 0) {
+              commentBody += `TruffleHog detected **${secretsCount}** potential secrets in this PR.\n\n`;
+              commentBody += 'Please **do not merge this PR** until these are remediated.\n\n';
+              commentBody += '### Detected Secrets Summary:\n';
+              
+              // Only include a limited number of detailed entries in the PR comment
+              const maxDetails = 5; 
+              for (let i = 0; i < Math.min(secretsCount, maxDetails); i++) {
+                  commentBody += secretDetails[i] + '\n\n';
+              }
+
+              if (secretsCount > maxDetails) {
+                  commentBody += `... and ${secretsCount - maxDetails} more.`;
+              }
+
+              commentBody += '\n\n**For full details, please review the `Run TruffleHog` step in the workflow logs.**\n';
+              commentBody += `[View Workflow Run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            } else {
+              commentBody += 'TruffleHog ran but found no structured secret results.';
+            }
+
+            // Ensure comment doesn't exceed GitHub API limits (65536 characters)
+            const finalComment = commentBody.slice(0, 60000); // Leave some buffer
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: finalComment
+            });
+
+      - name: Send Slack Notification if secrets found
+        if: steps.check-results.outputs.secrets_found == 'true'
+        # Pinning to a specific commit SHA for enhanced supply chain security.
+        # Always check the latest SHA for slackapi/slack-github-action when updating.
+        uses: slackapi/slack-github-action@e277c02b1158021c32607a755d667c4852c0f455 # v1.25.0
+        with:
+          payload: |
+            {
+              "text": "🚨 *TruffleHog Scan Alert* 🚨\nSecrets detected in `${{ github.repository }}` on `${{ github.ref_name }}`.\n*PR/Commit:* ${{ github.event.pull_request.html_url || github.event.head_commit.url }}\n*Workflow Run:* ${{ github.serverUrl }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Fail Job if Secrets Found
+        if: steps.check-results.outputs.secrets_found == 'true'
+        run: |
+          echo "Secrets detected! Failing the job to block the merge."
+          exit 1
