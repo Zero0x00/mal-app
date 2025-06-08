@@ -58,8 +58,8 @@ jobs:
         run: |
           # Consider pinning to a specific TruffleHog version for stability and reproducibility.
           # Example: curl ... | sh -s -- -b /usr/local/bin v3.x.x
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
-          trufflehog version # Verify installation and version
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin v3.89.0
+          trufflehog --version # Verify installation and version
 
       - name: Run TruffleHog
         id: run-scan
