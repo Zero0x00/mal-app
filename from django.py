@@ -12,7 +12,7 @@ from django import forms
 from django.db import models
 from django.core.wsgi import get_wsgi_application
 import json, requests, logging
-
+GITHUB_TOKEN=ghp_exampleFakeSecret1000234567890
 # --- Models ---
 class Product(models.Model):
     name = models.CharField(max_length=100)
@@ -213,6 +213,6 @@ application = get_wsgi_application()
 
 GITHUB_TOKEN = ghp_atUsQB6xVH49zZXWiZAMdOaxgRCwFyn02085
 Api-key: 123456789awsasddef
-GITHUB_TOKEN=ghp_exampleFakeSecret1234567890
+
 
 
