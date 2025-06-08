@@ -1,0 +1,27 @@
+name: Post-Merge TruffleHog Scan
+
+on:
+  workflow_run:
+    workflows: ["TruffleHog Scan"]  # exact name of the first workflow
+    types:
+      - completed
+
+permissions: 
+  contents: read 
+  id-token: write
+
+jobs:
+  PostMergeTruffleHog:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout latest code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog Post-Merge
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          extra_args: --scan-all-branches --no-entropy --regex
