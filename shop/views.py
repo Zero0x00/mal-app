@@ -22,11 +22,12 @@ def custom_add_to_cart(request):
             
             if not client_price:
                 return JsonResponse({'error': 'Price required'}, status=400)
-            
+
             CartItem.objects.create(
                 user=request.user,
                 product=product,
                 quantity=data.get('quantity', 1)
+                unit_price=float(client_price)
             )
 
             logging.warning(f"[INSECURE] User {request.user.username} added {product.name} at PRICE: {client_price}")
