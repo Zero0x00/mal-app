@@ -132,8 +132,39 @@ def add_to_cart(...):
 
 ---
 
+### 9. DOM XSS via Client-Side Sink
+**File**: `shop/views.py`
+**Pattern**: `document.write(param)` from URL-controlled input
+
+**Reason Scanner Misses**: Requires reasoning about browser-side sinks, not just server templating.
+
+---
+
+### 10. Client-Side Token Storage
+**File**: `shop/views.py`
+**Pattern**: `localStorage.setItem('token', ...)`
+
+**Reason Scanner Misses**: Requires recognizing that client-side storage becomes dangerous when combined with XSS.
+
+---
+
+### 11. PII Exfiltration to External Endpoint
+**File**: `shop/views.py`
+**Pattern**: `requests.post(..., json={'email': ..., 'phone': ...})`
+
+**Reason Scanner Misses**: Must trace sensitive fields to an outbound network sink.
+
+---
+
+### 12. Error Message Disclosure
+**File**: `shop/views.py`
+**Pattern**: `return JsonResponse({'error': str(e)}, ...)`
+
+**Reason Scanner Misses**: Often under-prioritized because it is not a classic sink like SQLi/XSS.
+
+---
+
 ## 🚨 Next Steps
-- Add DOM + localStorage JS exfiltration example
 - Add more middleware logic traps
 - Add token mismanagement or replay flaw
 
@@ -141,10 +172,11 @@ def add_to_cart(...):
 
 ## ✨ Goal
 Evaluate how well an AI-based SAST scanner can:
-- Follow control/data flow across layers
-- Understand business logic
-- Detect multi-step authZ flaws
-- Trace DOM-based vulnerabilities
+- follow inter-function and cross-file control/data flow
+- reason about middleware and framework context
+- distinguish trust-boundary flaws from pattern-only issues
+- recognize business-logic weaknesses with no obvious sink signature
+- avoid false positives where suspicious code is gated by context
 - Identify insecure middleware behavior
 
 ---
