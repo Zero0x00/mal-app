@@ -170,6 +170,14 @@ def add_to_cart(...):
 
 ---
 
+Middleware-aware true negative / false positive control: route looks open in the view, but middleware actually enforces a meaningful check.
+Middleware-aware true positive / false negative trap: route looks guarded because middleware exists, but middleware is flawed.
+Business-logic true positive: middleware or login exists, but ownership or workflow rules are still wrong.
+Cross-file context test: helper or middleware in another file changes whether the issue is real.
+
+does the tool understand the app? or does it match patterns?
+
+--
 ## ✨ Goal
 Evaluate how well an AI-based SAST scanner can:
 - follow inter-function and cross-file control/data flow
